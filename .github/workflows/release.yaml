@@ -1,0 +1,55 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.18'
+      - name: Cross building
+        run: |
+          CGO_ENABLED=0 GOOS=linux  GOARCH=amd64 go build -ldflags="-s -w" -o .build/http2tcp-linux-amd64
+          CGO_ENABLED=0 GOOS=linux  GOARCH=arm64 go build -ldflags="-s -w" -o .build/http2tcp-linux-arm64
+          CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags="-s -w" -o .build/http2tcp-windows-amd64.exe
+          CGO_ENABLED=0 GOOS=linux GOARCH=mipsle GOMIPS=softfloat go build -ldflags="-s -w" -o .build/http2tcp-linux-mipsle
+          CGO_ENABLED=0 GOOS=linux GOARCH=mips GOMIPS=softfloat go build -ldflags="-s -w" -o .build/http2tcp-linux-mips
+          CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags="-s -w" -o .build/http2tcp-linux-arm64
+          CGO_ENABLED=0 GOOS=linux GOARCH=arm go build -ldflags="-s -w" -o .build/http2tcp-linux-arm
+    
+        
+      - name: Generate body and compression
+        run: |
+          wget https://github.com/upx/upx/releases/download/v4.2.2/upx-4.2.2-amd64_linux.tar.xz
+          tar -xJf upx-4.2.2-amd64_linux.tar.xz upx-4.2.2-amd64_linux/upx
+          chmod +x .build/*
+          for file in .build/*; do upx-4.2.2-amd64_linux/upx "$file" -o "${file}-upx"; done
+          
+          echo '**Build At**:
+          
+          * `'"$(date)"'`
+          * `'"$(TZ=Asia/Shanghai date)"'`
+          
+          **sha256sum**:
+
+          ```-
+          '"$(cd .build && sha256sum *)"'
+          ```
+          ' > body.md
+      - name: Create Release
+        uses: ncipollo/release-action@v1
+        with:
+          name: main
+          allowUpdates: true
+          artifactErrorsFailBuild: true
+          replacesArtifacts: true
+          artifacts: .build/*
+          commit: main
+          tag: release-main-latest
+          bodyFile: body.md
